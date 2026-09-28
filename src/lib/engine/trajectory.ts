@@ -8,7 +8,7 @@ export interface Trajectory {
   swirl: number; // turns around the center mid-flight
   burst: number; // blow outwards mid-flight
   wobble: number; // jitter along the way
-  lift: number; // particles grow while flying
+  lift: number; // particles brighten while flying
   ease: Ease;
 }
 

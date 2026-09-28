@@ -54,7 +54,7 @@ void main() {
   vec2 clip = vec2((pos.x + 0.5) / uN * 2.0 - 1.0, 1.0 - (pos.y + 0.5) / uN * 2.0);
   float lift = arc * step(0.01, dot(d, d));
   gl_Position = vec4(clip, 0.5 - 0.49 * lift + uDepthBias, 1.0); // flying ones on top
-  gl_PointSize = uPoint * (1.0 + 1.6 * uLift * lift);
+  gl_PointSize = uPoint; // always one grid cell, growing in flight turns the picture into mush
   vColor = aColor;
   vLift = lift;
   vNow = pNow > 0.0 && pNow < 1.0 ? 1.0 : 0.0; // still flying right now
