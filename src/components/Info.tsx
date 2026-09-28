@@ -11,14 +11,17 @@ export function Info({ text }: { text: string }) {
   useGSAP(
     () => {
       const el = tip.current!;
+      // fast mouse: a close could start while the open is still running and lose to it. kill the old one first
+      gsap.killTweensOf(el);
       if (open) {
-        gsap.set(el, { x: 0 });
+        gsap.set(el, { display: "block", x: 0 });
         const r = el.getBoundingClientRect();
         const over = r.right - (window.innerWidth - 12);
         gsap.set(el, { x: over > 0 ? -over : 0 }); // keep it on screen near the right edge
         gsap.fromTo(el, { autoAlpha: 0, y: 6, scale: 0.97 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.28, ease: "power3.out" });
       } else {
-        gsap.to(el, { autoAlpha: 0, y: 4, duration: 0.18, ease: "power2.in" });
+        // display:none when closed, a hidden tip near the right edge still widens the page
+        gsap.to(el, { autoAlpha: 0, y: 4, duration: 0.18, ease: "power2.in", onComplete: () => void gsap.set(el, { display: "none" }) });
       }
     },
     { dependencies: [open] },
@@ -31,17 +34,18 @@ export function Info({ text }: { text: string }) {
         className="info"
         aria-label="?"
         aria-expanded={open}
-        onFocus={() => setOpen(true)}
+        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setOpen(true)} // keyboard only, a mouse click shouldn't pin it
         onBlur={() => setOpen(false)}
         onClick={(e) => {
+          // open only: focus already opened it, a toggle would close it right away on tap
           e.preventDefault();
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpen(true);
         }}
       >
         ?
       </button>
-      <span ref={tip} role="tooltip" className="tip" style={{ visibility: "hidden", opacity: 0 }}>
+      <span ref={tip} role="tooltip" className="tip" style={{ display: "none", visibility: "hidden", opacity: 0 }}>
         {text}
       </span>
     </span>

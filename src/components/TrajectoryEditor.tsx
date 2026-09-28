@@ -37,6 +37,7 @@ const same = (a: Trajectory, b: Trajectory) => (Object.keys(a) as (keyof Traject
 
 export function TrajectoryEditor({ value, onChange, disabled }: { value: Trajectory; onChange: (t: Trajectory) => void; disabled?: boolean }) {
   const { t } = useLang();
+  const svg = useRef<SVGSVGElement>(null);
   const dots = useRef<(SVGRectElement | null)[]>([]);
   const live = useRef(value);
   live.current = value;
@@ -59,8 +60,13 @@ export function TrajectoryEditor({ value, onChange, disabled }: { value: Traject
 
   useEffect(() => {
     let raf = 0;
+    let visible = false;
+    const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
+    io.observe(svg.current!);
     const t0 = performance.now();
     const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (!visible) return;
       const tr = live.current;
       const cycle = ((now - t0) / 2600) % 1.35; // a short pause at the end
       const g = Math.min(1, cycle);
@@ -73,17 +79,19 @@ export function TrajectoryEditor({ value, onChange, disabled }: { value: Traject
           el.setAttribute("y", String(((y + 0.5) / N) * H - 4));
         }
       });
-      raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+    };
   }, []);
 
   const fmt = (k: Knob["key"], v: number) => (k === "bias" ? (v === 0 ? "±" : v < 0 ? `↺ ${Math.abs(v).toFixed(2)}` : `↻ ${v.toFixed(2)}`) : v.toFixed(2));
 
   return (
     <div className="traj">
-      <svg className="traj-preview" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+      <svg ref={svg} className="traj-preview" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
         {paths.map((d, i) => (
           <path key={i} d={d} />
         ))}

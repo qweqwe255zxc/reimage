@@ -51,7 +51,7 @@ export function Hero() {
 
       <div ref={bottom} className="hero-bottom">
         <p className="hero-lede">{t.hero_lede}</p>
-        <button className="cta" data-cursor="↓" onClick={() => scrollToId("play")}>
+        <button className="cta" onClick={() => scrollToId("play")}>
           {t.hero_cta} <span>↘</span>
         </button>
         <dl className="facts">

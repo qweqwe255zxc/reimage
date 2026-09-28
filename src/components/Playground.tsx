@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Assigner } from "@/lib/engine/client";
 import { flatness, rgbaToLab } from "@/lib/engine/color";
 import { loadBitmap, toGrid, toSquare } from "@/lib/engine/image";
 import { buildMorph, MODES, type Mode } from "@/lib/engine/morph";
+import { ClipRecorder, download, recordMime } from "@/lib/engine/recorder";
 import { PixelRenderer } from "@/lib/engine/renderer";
 import { DEFAULT_TRAJ, randomTrajectory, type Trajectory } from "@/lib/engine/trajectory";
 import { useLang } from "@/lib/i18n";
@@ -14,40 +15,18 @@ import { Line, Presence } from "./Reveal";
 import { TrajectoryEditor } from "./TrajectoryEditor";
 
 type Slot = "src" | "tgt";
+type StatusKey = "recording" | "saved" | "no_rec" | "bad_file";
 interface Img {
   bmp: ImageBitmap;
   name: string;
   thumb: string;
 }
-interface Rec {
-  recorder: MediaRecorder;
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
-  intro: HTMLCanvasElement;
-  start: number;
-  w: number;
-  h: number;
-}
 
 const GRIDS = [64, 96, 128, 160, 192];
-const REC = { intro: 0.9, holdStart: 0.6, holdEnd: 1.5 };
 
 async function makeImg(src: string | Blob, name: string): Promise<Img> {
   const bmp = await loadBitmap(src);
   return { bmp, name, thumb: toSquare(bmp, 200).toDataURL("image/jpeg", 0.85) };
-}
-
-function pickMime() {
-  const types = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
-  return types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
-}
-
-function download(blob: Blob, name: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
 export function Playground() {
@@ -67,39 +46,35 @@ export function Playground() {
   const [traj, setTraj] = useState<Trajectory>(DEFAULT_TRAJ);
   const [progress, setProgress] = useState<number | null>(0);
   const [stats, setStats] = useState<{ n: number; ms: number; a: number; b: number } | null>(null);
-  const [status, setStatus] = useState<{ key: "recording" | "saved" | "no_rec" | "bad_file"; error?: boolean } | null>(null);
+  const [status, setStatus] = useState<{ key: StatusKey; error?: boolean } | null>(null);
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
   const [flat, setFlat] = useState(0);
 
-  const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false, traj: DEFAULT_TRAJ });
+  // the render loop and key handler read these, so they live in a ref instead of state
+  const st = useRef({ t: 0, dir: 1, playing: false, duration, trails, traj, mode, inView: false, visible: false });
+  Object.assign(st.current, { duration, trails, traj, mode });
   const perm = useRef<Int32Array | null>(null);
   const grid = useRef<Uint8ClampedArray | null>(null);
-  const rec = useRef<Rec | null>(null);
-  st.current.duration = duration;
-  st.current.trails = trails;
-  st.current.traj = traj;
+  const rec = useRef<ClipRecorder | null>(null);
 
   const play = (v: boolean) => {
     st.current.playing = v;
     setPlaying(v);
   };
   const restart = () => {
-    st.current.t = -0.2;
+    st.current.t = -0.2; // a short beat on the source before takeoff
     st.current.dir = 1;
     play(true);
   };
 
-  const rebuild = useCallback(
-    (m: Mode) => {
-      if (!perm.current || !grid.current || !renderer.current) return;
-      renderer.current.setMorph(buildMorph({ n: Math.sqrt(perm.current.length), src: grid.current, perm: perm.current, mode: m, seed: st.current.seed }));
-      restart();
-    },
-    [],
-  );
+  function rebuild(m: Mode) {
+    if (!perm.current || !grid.current || !renderer.current) return;
+    renderer.current.setMorph(buildMorph({ n: Math.sqrt(perm.current.length), src: grid.current, perm: perm.current, mode: m, seed: 0 }));
+    restart();
+  }
 
   useEffect(() => {
     try {
@@ -107,9 +82,10 @@ export function Playground() {
     } catch (e) {
       console.error(e);
       setFailed(true);
+      setProgress(null);
       return;
     }
-    assigner.current = new Assigner();
+    assigner.current = new Assigner(true);
     Promise.all([makeImg("/demo/plasma.png", "plasma"), makeImg("/demo/sunset.png", "sunset")]).then(([a, b]) => {
       setSrc(a);
       setTgt(b);
@@ -118,7 +94,13 @@ export function Playground() {
     const stop = (e: DragEvent) => e.preventDefault();
     window.addEventListener("dragover", stop);
     window.addEventListener("drop", stop);
-    const io = new IntersectionObserver(([e]) => (st.current.inView = e.intersectionRatio > 0.35), { threshold: [0, 0.35, 1] });
+    const io = new IntersectionObserver(
+      ([e]) => {
+        st.current.inView = e.intersectionRatio > 0.35;
+        st.current.visible = e.isIntersecting;
+      },
+      { threshold: [0, 0.35, 1] },
+    );
     io.observe(section.current!);
     return () => {
       window.removeEventListener("dragover", stop);
@@ -143,13 +125,13 @@ export function Playground() {
       grid.current = s;
       setStats({ n, ms: r.ms, a: r.errSorted, b: r.errFinal });
       setProgress(null);
-      rebuild(mode);
+      rebuild(st.current.mode); // whatever mode is picked by now, not when the job started
     });
     return () => {
       stale = true;
     };
-    // mode is applied via rebuild, no need to reassign on it
-  }, [src, tgt, n, rebuild]);
+    // rebuild only touches refs
+  }, [src, tgt, n]);
 
   useEffect(() => {
     let raf = 0;
@@ -160,10 +142,9 @@ export function Playground() {
       const s = st.current;
       const r = rec.current;
       if (r) {
-        const el = (now - r.start) / 1000;
-        const m = el - REC.intro - REC.holdStart;
-        if (m > s.duration + REC.holdEnd) stopRecording();
-        else s.t = Math.min(1, Math.max(0, m / s.duration));
+        const time = r.timeFor(s.duration);
+        if (time === null) finishRecording();
+        else s.t = time;
       } else if (s.playing) {
         s.t += (s.dir * dt) / s.duration;
         if ((s.dir > 0 && s.t >= 1) || (s.dir < 0 && s.t <= 0)) {
@@ -171,89 +152,60 @@ export function Playground() {
           play(false);
         }
       }
-      renderer.current?.draw(Math.max(0, s.t), { trails: s.trails, traj: s.traj });
-      if (r) compose(r, (now - r.start) / 1000);
-      if (scrub.current) scrub.current.value = String(Math.round(Math.max(0, s.t) * 1000));
+      if (s.visible || r) {
+        renderer.current?.draw(Math.max(0, s.t), { trails: s.trails, traj: s.traj });
+        r?.frame();
+        if (scrub.current) scrub.current.value = String(Math.round(Math.max(0, s.t) * 1000));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
+    // the loop reads everything through refs
   }, []);
 
-  function compose(r: Rec, el: number) {
-    const { ctx, w, h } = r;
-    const side = Math.floor(Math.min(w, h) * 0.92);
-    const x = (w - side) / 2;
-    const y = (h - side) / 2;
-    ctx.fillStyle = "#0e0e10";
-    ctx.fillRect(0, 0, w, h);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(canvas.current!, x, y, side, side);
-    const a = Math.min(1, Math.max(0, (el / REC.intro - 0.35) / 0.65)); // photo dissolves into the grid
-    if (a < 1) {
-      ctx.globalAlpha = 1 - a;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(r.intro, x, y, side, side);
-      ctx.globalAlpha = 1;
-    }
-  }
-
   function startRecording(w: number, h: number) {
-    const mime = pickMime();
+    const mime = recordMime();
     if (!mime) return setStatus({ key: "no_rec", error: true });
-    if (!src || progress !== null) return;
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext("2d")!;
-    const recorder = new MediaRecorder(c.captureStream(60), { mimeType: mime, videoBitsPerSecond: 16e6 });
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-    recorder.onstop = () => {
-      download(new Blob(chunks, { type: mime }), `reimage_${w}x${h}.${mime.startsWith("video/mp4") ? "mp4" : "webm"}`);
-      setStatus({ key: "saved" });
-    };
-    rec.current = { recorder, canvas: c, ctx, intro: toSquare(src.bmp, 1080), start: performance.now(), w, h };
+    if (!src || !canvas.current || progress !== null) return;
     st.current.t = 0;
     play(false);
+    rec.current = new ClipRecorder(canvas.current, toSquare(src.bmp, 1080), w, h, mime);
     setRecording(true);
     setStatus({ key: "recording" });
-    compose(rec.current, 0);
-    recorder.start();
   }
 
-  function stopRecording() {
+  async function finishRecording() {
     const r = rec.current;
     if (!r) return;
     rec.current = null;
     setRecording(false);
-    setTimeout(() => r.recorder.stop(), 150);
+    const { blob, ext } = await r.stop();
+    download(blob, `reimage_${r.w}x${r.h}.${ext}`);
+    setStatus({ key: "saved" });
   }
 
   function savePng() {
+    if (!canvas.current) return;
     const c = document.createElement("canvas");
     c.width = c.height = 1080;
     const ctx = c.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(canvas.current!, 0, 0, 1080, 1080);
+    ctx.drawImage(canvas.current, 0, 0, 1080, 1080);
     c.toBlob((b) => b && download(b, "reimage_frame.png"));
   }
 
-  async function loadFile(slot: Slot, file?: File) {
-    if (!file) return;
+  async function load(slot: Slot, source: string | Blob, name: string) {
+    if (rec.current) return; // swapping images mid-recording would wreck the clip
     try {
-      const img = await makeImg(file, file.name.replace(/\.[^.]+$/, ""));
+      const img = await makeImg(source, name);
       (slot === "src" ? setSrc : setTgt)(img);
       setStatus(null);
     } catch {
       setStatus({ key: "bad_file", error: true });
     }
   }
-
-  async function loadDemo(slot: Slot, id: string, url: string) {
-    const img = await makeImg(url, id);
-    (slot === "src" ? setSrc : setTgt)(img);
-  }
+  const loadFile = (slot: Slot, file?: File) => file && load(slot, file, file.name.replace(/\.[^.]+$/, ""));
 
   const togglePlay = () => {
     const s = st.current;
@@ -278,18 +230,20 @@ export function Playground() {
     rebuild(m);
   };
 
+  const keys = useRef({ togglePlay, reverse, pickTraj });
+  keys.current = { togglePlay, reverse, pickTraj };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (!st.current.inView || rec.current || el.matches("input, textarea")) return;
+      if (!st.current.inView || rec.current || !perm.current || el.matches("input, textarea")) return;
       // a focused button would also "click" on space, so it'd toggle twice
       if (el.matches("button")) el.blur();
       const k = e.key.toLowerCase();
       if (k === " ") {
         e.preventDefault();
-        togglePlay();
-      } else if (k === "r" || k === "к") reverse();
-      else if (k === "n" || k === "т") pickTraj(randomTrajectory());
+        keys.current.togglePlay();
+      } else if (k === "r" || k === "к") keys.current.reverse();
+      else if (k === "n" || k === "т") keys.current.pickTraj(randomTrajectory());
       else if (k === "arrowleft" || k === "arrowright") {
         st.current.t = Math.min(1, Math.max(0, st.current.t + (k === "arrowright" ? 0.02 : -0.02)));
         play(false);
@@ -297,9 +251,11 @@ export function Playground() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, []);
 
-  const busy = progress !== null || recording;
+  // computing only blocks playback and export: inputs stay live, a new job cancels the old one
+  const locked = recording || failed;
+  const busy = progress !== null || locked;
 
   return (
     <section
@@ -369,8 +325,10 @@ export function Playground() {
           {(["src", "tgt"] as const).map((slot, i) => {
             const img = slot === "src" ? src : tgt;
             return (
+              // explicit htmlFor: otherwise the label "clicks" its first button, which is the "?"
               <label
                 key={slot}
+                htmlFor={`file-${slot}`}
                 className="slot"
                 onDrop={(e) => {
                   e.preventDefault();
@@ -389,10 +347,11 @@ export function Playground() {
                   <span className="mono">{img?.name ?? "…"} · {t.drop}</span>
                 </span>
                 <input
+                  id={`file-${slot}`}
                   type="file"
                   accept="image/*"
                   hidden
-                  disabled={busy}
+                  disabled={locked}
                   onChange={(e) => {
                     loadFile(slot, e.target.files?.[0]);
                     e.target.value = "";
@@ -408,13 +367,13 @@ export function Playground() {
             </span>
             <div className="chips">
               {DEMOS.map((d) => (
-                <button key={d.id} className={tgt?.name === d.id ? "on" : ""} disabled={busy} onClick={() => loadDemo("tgt", d.id, d.src)}>
+                <button key={d.id} className={tgt?.name === d.id ? "on" : ""} disabled={locked} onClick={() => load("tgt", d.src, d.id)}>
                   <img src={d.src} alt="" />
                   <span>{d.id}</span>
                 </button>
               ))}
             </div>
-            <button className="txt" onClick={swap} disabled={busy}>
+            <button className="txt" onClick={swap} disabled={locked}>
               {t.swap} ⇅
             </button>
           </div>
@@ -425,7 +384,7 @@ export function Playground() {
             </span>
             <div className="seg">
               {GRIDS.map((g) => (
-                <button key={g} className={g === n ? "on" : ""} disabled={busy} onClick={() => setN(g)}>
+                <button key={g} className={g === n ? "on" : ""} disabled={locked} onClick={() => setN(g)}>
                   {g}
                 </button>
               ))}
@@ -438,7 +397,7 @@ export function Playground() {
             </span>
             <div className="seg small">
               {MODES.map((m) => (
-                <button key={m} className={m === mode ? "on" : ""} disabled={busy} onClick={() => pickMode(m)}>
+                <button key={m} className={m === mode ? "on" : ""} disabled={locked} onClick={() => pickMode(m)}>
                   {t.modes[m]}
                 </button>
               ))}
@@ -460,7 +419,7 @@ export function Playground() {
                   {duration.toFixed(1)} {t.sec}
                 </b>
               </span>
-              <input type="range" min={1} max={12} step={0.5} value={duration} onChange={(e) => setDuration(+e.target.value)} />
+              <input type="range" min={1} max={12} step={0.5} value={duration} disabled={recording} onChange={(e) => setDuration(+e.target.value)} />
             </label>
             <div className="field">
               <span className="mono idx">
