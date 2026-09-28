@@ -48,7 +48,13 @@ em {
   letter-spacing: 0.02em;
 }
 
-.line { display: block; overflow: hidden; padding-bottom: 0.06em; margin-bottom: -0.06em; }
+.line {
+  display: block;
+  overflow: hidden;
+  /* the mask needs room for descenders (у р д g), the breve on й and italic overhang, margins give the space back */
+  padding: 0.1em 0.14em 0.26em 0;
+  margin: -0.1em -0.14em -0.26em 0;
+}
 .line-inner { display: inline-block; will-change: transform; transform: translateY(110%); } /* gsap brings it up */
 .fade { opacity: 0; transform: translateY(24px); }
 
