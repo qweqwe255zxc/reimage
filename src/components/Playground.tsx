@@ -86,7 +86,7 @@ export function Playground() {
       return;
     }
     assigner.current = new Assigner(true);
-    Promise.all([makeImg("/demo/plasma.png", "plasma"), makeImg("/demo/sunset.png", "sunset")]).then(([a, b]) => {
+    Promise.all([makeImg("/demo/evening.jpg", "evening"), makeImg("/demo/day.jpg", "day")]).then(([a, b]) => {
       setSrc(a);
       setTgt(b);
     });

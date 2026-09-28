@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { EASE, gsap } from "@/lib/gsap";
 import { useIntro } from "./Providers";
 
-const ASSETS = ["/demo/plasma.png", "/demo/sunset.png", "/demo/orb.png", "/demo/type.png", "/demo/rings.png"];
+const ASSETS = ["/demo/plasma.png", "/demo/sunset.png", "/demo/orb.png", "/demo/type.png", "/demo/rings.png", "/demo/evening.jpg", "/demo/day.jpg"];
 
 export function Preloader() {
   const { setReady } = useIntro();
