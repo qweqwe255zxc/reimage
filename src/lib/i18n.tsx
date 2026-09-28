@@ -26,7 +26,7 @@ const dict = {
     into: "Во что",
     drop: "перетащи файл или нажми",
     drop_here: "Отпусти — станет исходником",
-    presets: "или готовое",
+    presets: "или цель из готовых",
     swap: "Поменять местами",
     grid: "сетка",
     order: "порядок вылета",
@@ -43,7 +43,9 @@ const dict = {
     knobs: { spread: "разброс старта", arc: "дуга", bias: "направление", swirl: "вихрь", burst: "взрыв", wobble: "дрожь", lift: "подъём" },
     eases: { smooth: "плавно", snap: "резко", linear: "ровно", spring: "пружина" },
     duration: "длительность",
+    sec: "с",
     trails: "шлейфы",
+    trails_hint: "хвост за летящими пикселями",
     on: "вкл",
     off: "выкл",
     save: "сохранить",
@@ -52,14 +54,16 @@ const dict = {
     frame: "Кадр PNG",
     play: "Пуск",
     pause: "Пауза",
-    reverse: "Назад",
+    reverse: "Реверс",
     computing: "раскладываю пиксели",
     recording: "идёт запись — не переключай вкладку",
     saved: "видео сохранено",
     no_rec: "этот браузер не умеет записывать видео",
     bad_file: "не получилось открыть файл",
     stats: (n: number, ms: number, a: number, b: number) =>
-      `${n}×${n} · ${(ms / 1000).toFixed(1)} с · ошибка цвета ${a.toFixed(0)} → ${b.toFixed(0)}`,
+      `сетка ${n}×${n} · расчёт ${(ms / 1000).toFixed(1)} с · разница цвета ${a.toFixed(0)} → ${b.toFixed(0)}`,
+    stats_hint:
+      "Разница цвета — насколько собранная картинка отличается от цели по цвету (средний ΔE в пространстве Lab, 0 — один в один). Первое число — после простой сортировки по яркости, второе — после обменов. Меньше — точнее. Если палитры картинок сильно разные, число останется большим: пиксели не перекрашиваются.",
     how_idx: "(02) Как это работает",
     how_title_1: "Четыре шага,",
     how_title_2: "ноль магии",
@@ -94,7 +98,7 @@ const dict = {
     into: "Into",
     drop: "drop a file or click",
     drop_here: "Drop it — becomes the source",
-    presets: "or pick one",
+    presets: "or pick a ready target",
     swap: "Swap",
     grid: "grid",
     order: "launch order",
@@ -111,7 +115,9 @@ const dict = {
     knobs: { spread: "launch spread", arc: "arc", bias: "direction", swirl: "swirl", burst: "burst", wobble: "wobble", lift: "lift" },
     eases: { smooth: "smooth", snap: "snappy", linear: "linear", spring: "spring" },
     duration: "duration",
+    sec: "s",
     trails: "trails",
+    trails_hint: "a tail behind flying pixels",
     on: "on",
     off: "off",
     save: "export",
@@ -127,7 +133,9 @@ const dict = {
     no_rec: "this browser can't record video",
     bad_file: "couldn't open that file",
     stats: (n: number, ms: number, a: number, b: number) =>
-      `${n}×${n} · ${(ms / 1000).toFixed(1)} s · color error ${a.toFixed(0)} → ${b.toFixed(0)}`,
+      `grid ${n}×${n} · computed in ${(ms / 1000).toFixed(1)} s · color difference ${a.toFixed(0)} → ${b.toFixed(0)}`,
+    stats_hint:
+      "Color difference is how far the rebuilt picture is from the target in color (mean ΔE in Lab space, 0 means identical). First number is after a plain brightness sort, second after the swaps. Lower is closer. Very different palettes keep it high: pixels are never recolored.",
     how_idx: "(02) How it works",
     how_title_1: "Four steps,",
     how_title_2: "zero magic",
@@ -158,8 +166,9 @@ export function LangProvider({ children }: { children: ReactNode }) {
     try {
       saved = localStorage.getItem("lang");
     } catch {}
-    if (saved === "ru" || saved === "en") setLang(saved);
-    else if (!navigator.language.startsWith("ru")) setLang("en");
+    const l = saved === "ru" || saved === "en" ? saved : navigator.language.startsWith("ru") ? "ru" : "en";
+    setLang(l);
+    document.documentElement.lang = l;
   }, []);
   const set = (l: Lang) => {
     setLang(l);

@@ -9,7 +9,10 @@ const sans = Inter_Tight({ subsets: ["latin", "cyrillic"], weight: ["400", "500"
 const serif = Cormorant_Garamond({ subsets: ["latin", "cyrillic"], weight: ["500"], style: ["italic"], variable: "--font-serif" });
 const mono = JetBrains_Mono({ subsets: ["latin", "cyrillic"], weight: ["400", "500"], variable: "--font-mono" });
 
+const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(host ? `https://${host}` : "http://localhost:3000"),
   title: "ReImage — every pixel finds a new home",
   description: "Pixels of one image fly across and rebuild another one. Nothing lost, nothing recolored.",
   openGraph: {

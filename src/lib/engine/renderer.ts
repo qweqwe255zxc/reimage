@@ -21,6 +21,7 @@ uniform float uSwirl;
 uniform float uBurst;
 uniform float uWobble;
 uniform int uEase;
+uniform float uDepthBias;
 out vec3 vColor;
 out float vLift;
 
@@ -49,7 +50,7 @@ void main() {
 
   vec2 clip = vec2((pos.x + 0.5) / uN * 2.0 - 1.0, 1.0 - (pos.y + 0.5) / uN * 2.0);
   float lift = arc * step(0.01, dot(d, d));
-  gl_Position = vec4(clip, 0.5 - 0.49 * lift, 1.0); // flying ones on top
+  gl_Position = vec4(clip, 0.5 - 0.49 * lift + uDepthBias, 1.0); // flying ones on top
   gl_PointSize = uPoint * (1.0 + uLift * lift);
   vColor = aColor;
   vLift = lift;
@@ -60,22 +61,12 @@ precision highp float;
 in vec3 vColor;
 in float vLift;
 uniform float uGlow;
+uniform float uGhost;
 out vec4 outColor;
 void main() {
-  outColor = vec4(vColor * (1.0 + uGlow * vLift), 1.0);
+  if (uGhost > 0.0 && vLift < 0.02) discard; // only flying particles leave a tail
+  outColor = vec4(vColor * (1.0 + uGlow * vLift), uGhost > 0.0 ? uGhost : 1.0);
 }`;
-
-const FADE_VS = `#version 300 es
-void main() {
-  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}`;
-
-const FADE_FS = `#version 300 es
-precision highp float;
-uniform vec4 uColor;
-out vec4 outColor;
-void main() { outColor = uColor; }`;
 
 function compile(gl: WebGL2RenderingContext, vs: string, fs: string) {
   const prog = gl.createProgram()!;
@@ -104,7 +95,6 @@ export class PixelRenderer {
   readonly canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext;
   private prog: WebGLProgram;
-  private fade: WebGLProgram;
   private vao: WebGLVertexArrayObject;
   private buffers: Record<string, WebGLBuffer> = {};
   private u: Record<string, WebGLUniformLocation | null> = {};
@@ -119,11 +109,9 @@ export class PixelRenderer {
     if (!gl) throw new Error("webgl2 not supported");
     this.gl = gl;
     this.prog = compile(gl, VS, FS);
-    this.fade = compile(gl, FADE_VS, FADE_FS);
     this.vao = gl.createVertexArray()!;
     this.maxPoint = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1];
-    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow", "uArc", "uBias", "uSwirl", "uBurst", "uWobble", "uEase"]) this.u[name] = gl.getUniformLocation(this.prog, name);
-    this.u.uColor = gl.getUniformLocation(this.fade, "uColor");
+    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow", "uArc", "uBias", "uSwirl", "uBurst", "uWobble", "uEase", "uGhost", "uDepthBias"]) this.u[name] = gl.getUniformLocation(this.prog, name);
 
     gl.bindVertexArray(this.vao);
     const attr = (name: string, size: number, type: number, normalized = false) => {
@@ -185,18 +173,7 @@ export class PixelRenderer {
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-    if (o.trails) {
-      gl.disable(gl.DEPTH_TEST);
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.useProgram(this.fade);
-      gl.uniform4f(this.u.uColor, this.bg[0], this.bg[1], this.bg[2], 0.22);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.disable(gl.BLEND);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-    } else {
-      this.clear();
-    }
+    this.clear();
     if (!m) return;
 
     gl.enable(gl.DEPTH_TEST);
@@ -217,7 +194,24 @@ export class PixelRenderer {
     gl.uniform1f(this.u.uBurst, tr.burst);
     gl.uniform1f(this.u.uWobble, tr.wobble);
     gl.uniform1i(this.u.uEase, EASES.indexOf(tr.ease));
+    gl.uniform1f(this.u.uGhost, 0);
+    gl.uniform1f(this.u.uDepthBias, 0);
     gl.drawArrays(gl.POINTS, 0, m.count);
+
+    if (o.trails) {
+      // tail = the same particles a moment ago, fading out. above the still pixels, below the live ones
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.uniform1f(this.u.uDepthBias, 0.004);
+      for (let k = 8; k >= 1; k--) {
+        gl.uniform1f(this.u.uT, t - k * 0.026);
+        gl.uniform1f(this.u.uGhost, 0.55 * (1 - k / 9));
+        gl.drawArrays(gl.POINTS, 0, m.count);
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
     gl.bindVertexArray(null);
   }
 

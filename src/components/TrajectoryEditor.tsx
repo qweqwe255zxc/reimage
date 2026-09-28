@@ -91,14 +91,14 @@ export function TrajectoryEditor({ value, onChange, disabled }: { value: Traject
         ))}
       </svg>
 
-      <div className="chips">
+      <div className="seg">
         {Object.entries(PRESETS).map(([id, p]) => (
           <button key={id} className={same(p, value) ? "on" : ""} disabled={disabled} onClick={() => onChange(p)}>
-            <span>{t.presets_traj[id as keyof typeof t.presets_traj]}</span>
+            {t.presets_traj[id as keyof typeof t.presets_traj]}
           </button>
         ))}
         <button className="dice" disabled={disabled} onClick={() => onChange(randomTrajectory())}>
-          <span>{t.random} ↻</span>
+          {t.random} ↻
         </button>
       </div>
 

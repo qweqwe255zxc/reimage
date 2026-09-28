@@ -71,6 +71,7 @@ export function Playground() {
   const [recording, setRecording] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [hint, setHint] = useState(false);
 
   const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false, traj: DEFAULT_TRAJ });
   const perm = useRef<Int32Array | null>(null);
@@ -112,9 +113,15 @@ export function Playground() {
       setSrc(a);
       setTgt(b);
     });
+    // a file dropped anywhere else would make the browser leave the page and open it
+    const stop = (e: DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
     const io = new IntersectionObserver(([e]) => (st.current.inView = e.intersectionRatio > 0.35), { threshold: [0, 0.35, 1] });
     io.observe(section.current!);
     return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
       io.disconnect();
       assigner.current?.dispose();
       renderer.current?.dispose();
@@ -162,7 +169,7 @@ export function Playground() {
           play(false);
         }
       }
-      renderer.current?.draw(Math.max(0, s.t), { trails: s.trails && !r, traj: s.traj });
+      renderer.current?.draw(Math.max(0, s.t), { trails: s.trails, traj: s.traj });
       if (r) compose(r, (now - r.start) / 1000);
       if (scrub.current) scrub.current.value = String(Math.round(Math.max(0, s.t) * 1000));
       raf = requestAnimationFrame(tick);
@@ -271,7 +278,10 @@ export function Playground() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!st.current.inView || rec.current || (e.target as HTMLElement).matches("input, textarea")) return;
+      const el = e.target as HTMLElement;
+      if (!st.current.inView || rec.current || el.matches("input, textarea")) return;
+      // a focused button would also "click" on space, so it'd toggle twice
+      if (el.matches("button")) el.blur();
       const k = e.key.toLowerCase();
       if (k === " ") {
         e.preventDefault();
@@ -318,7 +328,7 @@ export function Playground() {
 
       <div className="play-grid">
         <div className="play-stage">
-          <div className="play-frame" data-cursor="drop">
+          <div className="play-frame">
             {failed ? <p className="mono fail">WebGL2 is not available</p> : <canvas ref={canvas} className="play-canvas" />}
             <AnimatePresence>
               {progress !== null && (
@@ -352,7 +362,13 @@ export function Playground() {
           </div>
           <p className={`mono status ${status?.error ? "error" : ""}`}>
             {status ? t[status.key] : stats ? t.stats(stats.n, stats.ms, stats.a, stats.b) : " "}
+            {!status && stats && (
+              <button className="info" aria-label="?" aria-expanded={hint} onClick={() => setHint(!hint)}>
+                ?
+              </button>
+            )}
           </p>
+          {hint && <p className="hint">{t.stats_hint}</p>}
         </div>
 
         <div className="play-controls">
@@ -434,12 +450,16 @@ export function Playground() {
           <div className="block row2">
             <label className="field">
               <span className="mono idx">
-                (06) {t.duration} <b>{duration.toFixed(1)}s</b>
+                (06) {t.duration} <b>
+                  {duration.toFixed(1)} {t.sec}
+                </b>
               </span>
               <input type="range" min={1} max={12} step={0.5} value={duration} onChange={(e) => setDuration(+e.target.value)} />
             </label>
             <div className="field">
-              <span className="mono idx">(07) {t.trails}</span>
+              <span className="mono idx" title={t.trails_hint}>
+                (07) {t.trails}
+              </span>
               <div className="seg small">
                 <button className={trails ? "on" : ""} onClick={() => setTrails(true)}>
                   {t.on}

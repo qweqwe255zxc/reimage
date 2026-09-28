@@ -23,15 +23,19 @@ export function Cursor() {
       el.classList.toggle("is-hot", Boolean(hot));
     };
     const loop = () => {
+      if (x < 0) cx = cy = -100; // gone, don't slide back in from the corner
       cx += (x - cx) * 0.22;
       cy += (y - cy) * 0.22;
       el.style.translate = `${cx}px ${cy}px`; // not transform: `scale` would scale the offset too
       raf = requestAnimationFrame(loop);
     };
+    const leave = () => (x = y = -100);
     window.addEventListener("pointermove", move);
+    document.documentElement.addEventListener("pointerleave", leave);
     raf = requestAnimationFrame(loop);
     return () => {
       window.removeEventListener("pointermove", move);
+      document.documentElement.removeEventListener("pointerleave", leave);
       cancelAnimationFrame(raf);
     };
   }, []);
