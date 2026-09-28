@@ -6,9 +6,11 @@ import { Assigner } from "@/lib/engine/client";
 import { loadBitmap, toGrid, toSquare } from "@/lib/engine/image";
 import { buildMorph, MODES, type Mode } from "@/lib/engine/morph";
 import { PixelRenderer } from "@/lib/engine/renderer";
+import { DEFAULT_TRAJ, randomTrajectory, type Trajectory } from "@/lib/engine/trajectory";
 import { useLang } from "@/lib/i18n";
 import { DEMOS, INK } from "@/lib/site";
 import { Line } from "./Reveal";
+import { TrajectoryEditor } from "./TrajectoryEditor";
 
 type Slot = "src" | "tgt";
 interface Img {
@@ -61,6 +63,7 @@ export function Playground() {
   const [mode, setMode] = useState<Mode>("contrast");
   const [duration, setDuration] = useState(4);
   const [trails, setTrails] = useState(false);
+  const [traj, setTraj] = useState<Trajectory>(DEFAULT_TRAJ);
   const [progress, setProgress] = useState<number | null>(0);
   const [stats, setStats] = useState<{ n: number; ms: number; a: number; b: number } | null>(null);
   const [status, setStatus] = useState<{ key: "recording" | "saved" | "no_rec" | "bad_file"; error?: boolean } | null>(null);
@@ -69,12 +72,13 @@ export function Playground() {
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false });
+  const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false, traj: DEFAULT_TRAJ });
   const perm = useRef<Int32Array | null>(null);
   const grid = useRef<Uint8ClampedArray | null>(null);
   const rec = useRef<Rec | null>(null);
   st.current.duration = duration;
   st.current.trails = trails;
+  st.current.traj = traj;
 
   const play = (v: boolean) => {
     st.current.playing = v;
@@ -158,7 +162,7 @@ export function Playground() {
           play(false);
         }
       }
-      renderer.current?.draw(Math.max(0, s.t), { trails: s.trails && !r });
+      renderer.current?.draw(Math.max(0, s.t), { trails: s.trails && !r, traj: s.traj });
       if (r) compose(r, (now - r.start) / 1000);
       if (scrub.current) scrub.current.value = String(Math.round(Math.max(0, s.t) * 1000));
       raf = requestAnimationFrame(tick);
@@ -255,9 +259,10 @@ export function Playground() {
     setSrc(tgt);
     setTgt(src);
   };
-  const reshuffle = () => {
-    st.current.seed++;
-    rebuild(mode);
+  // new knobs should be seen right away, so replay from the start
+  const pickTraj = (tr: Trajectory) => {
+    setTraj(tr);
+    if (!st.current.playing) restart();
   };
   const pickMode = (m: Mode) => {
     setMode(m);
@@ -272,7 +277,7 @@ export function Playground() {
         e.preventDefault();
         togglePlay();
       } else if (k === "r" || k === "к") reverse();
-      else if (k === "n" || k === "т") reshuffle();
+      else if (k === "n" || k === "т") pickTraj(randomTrajectory());
       else if (k === "arrowleft" || k === "arrowright") {
         st.current.t = Math.min(1, Math.max(0, st.current.t + (k === "arrowright" ? 0.02 : -0.02)));
         play(false);
@@ -419,20 +424,22 @@ export function Playground() {
                 </button>
               ))}
             </div>
-            <button className="txt" onClick={reshuffle} disabled={busy}>
-              {t.reshuffle} ↻
-            </button>
+          </div>
+
+          <div className="block">
+            <span className="mono idx">(05) {t.traj}</span>
+            <TrajectoryEditor value={traj} onChange={pickTraj} disabled={recording} />
           </div>
 
           <div className="block row2">
             <label className="field">
               <span className="mono idx">
-                (05) {t.duration} <b>{duration.toFixed(1)}s</b>
+                (06) {t.duration} <b>{duration.toFixed(1)}s</b>
               </span>
               <input type="range" min={1} max={12} step={0.5} value={duration} onChange={(e) => setDuration(+e.target.value)} />
             </label>
             <div className="field">
-              <span className="mono idx">(06) {t.trails}</span>
+              <span className="mono idx">(07) {t.trails}</span>
               <div className="seg small">
                 <button className={trails ? "on" : ""} onClick={() => setTrails(true)}>
                   {t.on}
@@ -445,7 +452,7 @@ export function Playground() {
           </div>
 
           <div className="block export">
-            <span className="mono idx">(07) {t.save}</span>
+            <span className="mono idx">(08) {t.save}</span>
             <button className="big" disabled={busy} onClick={() => startRecording(1080, 1080)}>
               {t.video_sq} <span>↗</span>
             </button>

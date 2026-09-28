@@ -11,7 +11,7 @@ import { scrollToId } from "./SmoothScroll";
 export function Hero() {
   const { t } = useLang();
   const { ready } = useIntro();
-  const [step, setStep] = useState({ from: "plasma", to: "sunset", i: -1 });
+  const [step, setStep] = useState({ from: "plasma", to: "sunset", i: -1, style: "smooth" });
 
   return (
     <section className="hero">
@@ -31,13 +31,13 @@ export function Hero() {
         animate={ready ? { opacity: 1, scale: 1 } : undefined}
         transition={{ duration: 1.4, ease: [0.76, 0, 0.24, 1], delay: 0.2 }}
       >
-        <HeroCanvas onStep={(from, to, i) => setStep({ from, to, i })} />
+        <HeroCanvas onStep={(from, to, i, style) => setStep({ from, to, i, style })} />
         <figcaption className="mono hero-caption">
           <span>
             <i className="dot" /> {t.live}
           </span>
           <span>
-            {step.from} → {step.to}
+            {step.from} → {step.to} · {t.presets_traj[step.style as keyof typeof t.presets_traj]}
           </span>
           <span>{String(Math.max(0, step.i) + 1).padStart(2, "0")}/04</span>
         </figcaption>

@@ -25,7 +25,7 @@ export function Cursor() {
     const loop = () => {
       cx += (x - cx) * 0.22;
       cy += (y - cy) * 0.22;
-      el.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
+      el.style.translate = `${cx}px ${cy}px`; // not transform: `scale` would scale the offset too
       raf = requestAnimationFrame(loop);
     };
     window.addEventListener("pointermove", move);

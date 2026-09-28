@@ -79,7 +79,7 @@ em {
   transition: scale 0.35s var(--ease);
 }
 .cursor.is-hot { scale: 4.2; }
-@media (pointer: fine) { body, button, a, label { cursor: none; } }
+@media (pointer: fine) { body, button, a, label, input { cursor: none !important; } }
 
 /* preloader */
 .preloader {
@@ -115,7 +115,9 @@ em {
   padding: 18px var(--pad);
   color: #fff;
   mix-blend-mode: difference;
+  transition: transform 0.5s var(--ease);
 }
+.nav.is-hidden { transform: translateY(-100%); }
 .nav-logo { font-weight: 800; letter-spacing: -0.02em; font-size: 17px; }
 .nav-logo sup { font-size: 0.55em; font-weight: 500; }
 .nav-links { display: flex; gap: clamp(14px, 2.4vw, 32px); align-items: center; font-size: 14px; }
@@ -357,11 +359,11 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 @keyframes marquee { to { transform: translateX(-50%); } }
 .foot-row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding: 20px var(--pad); color: var(--soft-dark); }
 .wordmark {
-  font-size: 25vw;
+  font-size: 30vw;
   font-weight: 800;
   letter-spacing: -0.075em;
-  line-height: 0.78;
-  padding: 0 var(--pad) 3vw;
+  line-height: 0.9;
+  padding: 0 var(--pad) 0.22em;  /* room for the italic g tail */
   margin-left: -0.03em;
   white-space: nowrap;
 }
@@ -395,3 +397,16 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 @media (prefers-reduced-motion: reduce) {
   .track, .dot { animation: none; }
 }
+
+/* trajectory constructor */
+.traj { display: grid; gap: 12px; }
+.traj-preview { width: 100%; height: auto; background: var(--ink-2); border: 1px solid var(--rule-dark); }
+.traj-preview path { fill: none; stroke: rgba(232, 229, 222, 0.22); stroke-width: 1; }
+.traj-preview rect { fill: var(--paper); }
+.traj-preview rect.hot { fill: var(--hot); }
+.chips .dice { border-style: dashed; }
+.knobs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+.knob { display: grid; gap: 2px; }
+.knob .mono { color: var(--soft-dark); display: flex; justify-content: space-between; }
+.knob b { color: var(--paper); font-weight: 500; }
+@media (max-width: 600px) { .knobs { grid-template-columns: 1fr; } }

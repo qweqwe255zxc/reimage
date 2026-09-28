@@ -5,16 +5,18 @@ import { Assigner } from "@/lib/engine/client";
 import { loadBitmap, toGrid } from "@/lib/engine/image";
 import { buildMorph, type Mode } from "@/lib/engine/morph";
 import { PixelRenderer } from "@/lib/engine/renderer";
+import { PRESETS } from "@/lib/engine/trajectory";
 import { PAPER } from "@/lib/site";
 
 const N = 96;
 const CHAIN = ["sunset", "orb", "type", "rings"];
 const MODES: Mode[] = ["contrast", "wave", "brightness", "distance"];
+const STYLES = ["smooth", "vortex", "burst", "river"] as const;
 const HOLD = 1.6;
 const FLY = 3.4;
 
 // one set of plasma pixels hopping from picture to picture forever
-export function HeroCanvas({ onStep }: { onStep: (from: string, to: string, i: number) => void }) {
+export function HeroCanvas({ onStep }: { onStep: (from: string, to: string, i: number, style: string) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
   const stepCb = useRef(onStep);
@@ -68,7 +70,7 @@ export function HeroCanvas({ onStep }: { onStep: (from: string, to: string, i: n
               step = next;
               morph = buildMorph({ n: N, src, perm: perms[next]!, mode: MODES[next], seed: next, start: morph.end });
               renderer.setMorph(morph);
-              stepCb.current(prev, CHAIN[next], next);
+              stepCb.current(prev, CHAIN[next], next, STYLES[next]);
               prev = CHAIN[next];
               phase = "fly";
               clock = 0;
@@ -77,7 +79,7 @@ export function HeroCanvas({ onStep }: { onStep: (from: string, to: string, i: n
             phase = "hold";
             clock = 0;
           }
-          renderer.draw(phase === "fly" ? clock / FLY : step < 0 ? 0 : 1, { lift: 0.8, glow: 0.15 });
+          renderer.draw(phase === "fly" ? clock / FLY : step < 0 ? 0 : 1, { glow: 0.15, traj: PRESETS[STYLES[Math.max(0, step)]] });
         }
         if (alive) raf = requestAnimationFrame(tick);
       };

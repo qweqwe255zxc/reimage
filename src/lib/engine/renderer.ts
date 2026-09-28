@@ -1,31 +1,53 @@
 import type { Morph } from "./morph";
+import { DEFAULT_TRAJ, EASES, type Trajectory } from "./trajectory";
 
-// same motion as reimage/anim.py, but per-vertex on the gpu
+// same motion as reimage/anim.py plus the constructor knobs, per-vertex on the gpu
+// keep in sync with pathPoint() in trajectory.ts
 const VS = `#version 300 es
 in vec2 aStart;
 in vec2 aEnd;
-in float aDelay;
+in float aRank;
 in float aCurl;
+in float aRand;
 in vec3 aColor;
 uniform float uT;
 uniform float uSpread;
 uniform float uN;
 uniform float uPoint;
 uniform float uLift;
+uniform float uArc;
+uniform float uBias;
+uniform float uSwirl;
+uniform float uBurst;
+uniform float uWobble;
+uniform int uEase;
 out vec3 vColor;
 out float vLift;
 
 float ease(float p) {
+  if (uEase == 1) return p >= 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * p);
+  if (uEase == 2) return p;
+  if (uEase == 3) return 1.0 + 2.70158 * pow(p - 1.0, 3.0) + 1.70158 * pow(p - 1.0, 2.0);
   return p < 0.5 ? 4.0 * p * p * p : 1.0 - pow(-2.0 * p + 2.0, 3.0) / 2.0;
 }
 
 void main() {
-  float p = clamp((uT - aDelay) / (1.0 - uSpread), 0.0, 1.0);
+  float p = clamp((uT - aRank * uSpread) / (1.0 - uSpread), 0.0, 1.0);
   float e = ease(p);
+  float arc = sin(3.14159265 * clamp(e, 0.0, 1.0));
   vec2 d = aEnd - aStart;
-  float arc = sin(3.14159265 * e);
-  vec2 c = aStart + d * e + vec2(-d.y, d.x) * arc * aCurl;
-  vec2 clip = vec2((c.x + 0.5) / uN * 2.0 - 1.0, 1.0 - (c.y + 0.5) / uN * 2.0);
+  float dir = mix(aCurl, abs(aCurl) * (uBias < 0.0 ? -1.0 : 1.0), abs(uBias));
+  vec2 pos = aStart + d * e + vec2(-d.y, d.x) * arc * dir * uArc;
+
+  vec2 c = vec2((uN - 1.0) * 0.5);
+  vec2 q = pos - c;
+  float a = uSwirl * 6.2831853 * arc;
+  q = vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a));
+  q += q / (length(q) + 1e-3) * uBurst * arc * uN * 0.35 * (0.5 + aRand);
+  pos = c + q;
+  pos += vec2(sin(e * 19.0 + aRand * 6.283), cos(e * 23.0 + aRand * 9.1)) * uWobble * arc * uN * 0.04;
+
+  vec2 clip = vec2((pos.x + 0.5) / uN * 2.0 - 1.0, 1.0 - (pos.y + 0.5) / uN * 2.0);
   float lift = arc * step(0.01, dot(d, d));
   gl_Position = vec4(clip, 0.5 - 0.49 * lift, 1.0); // flying ones on top
   gl_PointSize = uPoint * (1.0 + uLift * lift);
@@ -74,8 +96,8 @@ function compile(gl: WebGL2RenderingContext, vs: string, fs: string) {
 
 export interface DrawOptions {
   trails?: boolean;
-  lift?: number;
   glow?: number;
+  traj?: Trajectory;
 }
 
 export class PixelRenderer {
@@ -100,7 +122,7 @@ export class PixelRenderer {
     this.fade = compile(gl, FADE_VS, FADE_FS);
     this.vao = gl.createVertexArray()!;
     this.maxPoint = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1];
-    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow"]) this.u[name] = gl.getUniformLocation(this.prog, name);
+    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow", "uArc", "uBias", "uSwirl", "uBurst", "uWobble", "uEase"]) this.u[name] = gl.getUniformLocation(this.prog, name);
     this.u.uColor = gl.getUniformLocation(this.fade, "uColor");
 
     gl.bindVertexArray(this.vao);
@@ -114,8 +136,9 @@ export class PixelRenderer {
     };
     attr("aStart", 2, gl.FLOAT);
     attr("aEnd", 2, gl.FLOAT);
-    attr("aDelay", 1, gl.FLOAT);
+    attr("aRank", 1, gl.FLOAT);
     attr("aCurl", 1, gl.FLOAT);
+    attr("aRand", 1, gl.FLOAT);
     attr("aColor", 3, gl.UNSIGNED_BYTE, true);
     gl.bindVertexArray(null);
     this.clear();
@@ -129,8 +152,9 @@ export class PixelRenderer {
     };
     up("aStart", m.start);
     up("aEnd", m.end);
-    up("aDelay", m.delay);
+    up("aRank", m.rank);
     up("aCurl", m.curl);
+    up("aRand", m.rand);
     up("aColor", m.color);
     this.morph = m;
   }
@@ -180,12 +204,19 @@ export class PixelRenderer {
     gl.useProgram(this.prog);
     gl.bindVertexArray(this.vao);
     const cell = this.canvas.width / m.n;
+    const tr = o.traj ?? DEFAULT_TRAJ;
     gl.uniform1f(this.u.uT, t);
-    gl.uniform1f(this.u.uSpread, m.spread);
+    gl.uniform1f(this.u.uSpread, Math.min(0.95, tr.spread));
     gl.uniform1f(this.u.uN, m.n);
     gl.uniform1f(this.u.uPoint, Math.min(this.maxPoint / 2, cell + 0.35)); // tiny overlap hides seams
-    gl.uniform1f(this.u.uLift, o.lift ?? 0.6);
+    gl.uniform1f(this.u.uLift, tr.lift);
     gl.uniform1f(this.u.uGlow, o.glow ?? 0.25);
+    gl.uniform1f(this.u.uArc, tr.arc);
+    gl.uniform1f(this.u.uBias, tr.bias);
+    gl.uniform1f(this.u.uSwirl, tr.swirl);
+    gl.uniform1f(this.u.uBurst, tr.burst);
+    gl.uniform1f(this.u.uWobble, tr.wobble);
+    gl.uniform1i(this.u.uEase, EASES.indexOf(tr.ease));
     gl.drawArrays(gl.POINTS, 0, m.count);
     gl.bindVertexArray(null);
   }

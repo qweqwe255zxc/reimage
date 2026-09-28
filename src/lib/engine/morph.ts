@@ -10,10 +10,10 @@ export interface Morph {
   count: number;
   start: Float32Array; // cell coords, xy pairs
   end: Float32Array;
-  delay: Float32Array;
-  curl: Float32Array;
+  rank: Float32Array; // launch order 0..1, the shader turns it into a delay
+  curl: Float32Array; // -1..1
+  rand: Float32Array; // 0..1
   color: Uint8Array; // rgb
-  spread: number;
 }
 
 export function homeCells(n: number) {
@@ -32,10 +32,8 @@ export function buildMorph(opts: {
   mode: Mode;
   seed: number;
   start?: Float32Array;
-  spread?: number;
-  curl?: number;
 }): Morph {
-  const { n, src, perm, mode, seed, spread = 0.55, curl = 0.35 } = opts;
+  const { n, src, perm, mode, seed } = opts;
   const m = n * n;
   const rnd = mulberry32(seed * 31 + 7);
   const start = opts.start ?? homeCells(n);
@@ -76,14 +74,14 @@ export function buildMorph(opts: {
 
   const order = new Int32Array(m);
   argsortInto(order, new Float64Array(m), m, key);
-  const delay = new Float32Array(m);
-  const curls = new Float32Array(m);
-  for (let i = 0; i < m; i++) {
-    const s = order[i];
-    const rank = i / Math.max(1, m - 1) + (rnd() - 0.5) * 0.16;
-    delay[s] = Math.min(1, Math.max(0, rank)) * spread;
+  const rank = new Float32Array(m);
+  const curl = new Float32Array(m);
+  const rand = new Float32Array(m);
+  for (let i = 0; i < m; i++) rank[order[i]] = Math.min(1, Math.max(0, i / Math.max(1, m - 1) + (rnd() - 0.5) * 0.16));
+  for (let s = 0; s < m; s++) {
+    curl[s] = rnd() * 2 - 1;
+    rand[s] = rnd();
   }
-  for (let s = 0; s < m; s++) curls[s] = (rnd() * 2 - 1) * curl;
 
-  return { n, count: m, start, end, delay, curl: curls, color, spread };
+  return { n, count: m, start, end, rank, curl, rand, color };
 }
