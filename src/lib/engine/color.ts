@@ -24,6 +24,18 @@ export function rgbaToLab(rgba: Uint8ClampedArray | Uint8Array): Float32Array {
   return out;
 }
 
+// share of pixels within +-6 of the median lightness. ui screenshots and flat logos score ~0.8, photos ~0.1-0.3
+export function flatness(lab: Float32Array): number {
+  const m = lab.length / 3;
+  const L = new Float32Array(m);
+  for (let i = 0; i < m; i++) L[i] = lab[i * 3];
+  const sorted = L.slice().sort();
+  const med = sorted[m >> 1];
+  let near = 0;
+  for (let i = 0; i < m; i++) if (Math.abs(L[i] - med) < 6) near++;
+  return near / m;
+}
+
 // sobel on lightness, normalized to 0..1
 export function contrastMap(lab: Float32Array, n: number): Float32Array {
   const L = (x: number, y: number) => {

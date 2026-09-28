@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Assigner } from "@/lib/engine/client";
+import { flatness, rgbaToLab } from "@/lib/engine/color";
 import { loadBitmap, toGrid, toSquare } from "@/lib/engine/image";
 import { buildMorph, MODES, type Mode } from "@/lib/engine/morph";
 import { PixelRenderer } from "@/lib/engine/renderer";
@@ -72,6 +73,7 @@ export function Playground() {
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
   const [hint, setHint] = useState(false);
+  const [flat, setFlat] = useState(0);
 
   const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false, traj: DEFAULT_TRAJ });
   const perm = useRef<Int32Array | null>(null);
@@ -135,6 +137,7 @@ export function Playground() {
     setProgress(0);
     const s = toGrid(src.bmp, n);
     const g = toGrid(tgt.bmp, n);
+    setFlat(flatness(rgbaToLab(s)));
     assigner.current.run(s, g, n, 0, (p) => !stale && setProgress(p)).then((r) => {
       if (stale || !r) return;
       perm.current = r.perm;
@@ -369,6 +372,7 @@ export function Playground() {
             )}
           </p>
           {hint && <p className="hint">{t.stats_hint}</p>}
+          {flat > 0.7 && progress === null && <p className="hint warn">{t.flat_warn(Math.round(flat * 100))}</p>}
         </div>
 
         <div className="play-controls">

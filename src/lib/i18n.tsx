@@ -62,6 +62,8 @@ const dict = {
     bad_file: "не получилось открыть файл",
     stats: (n: number, ms: number, a: number, b: number) =>
       `сетка ${n}×${n} · расчёт ${(ms / 1000).toFixed(1)} с · разница цвета ${a.toFixed(0)} → ${b.toFixed(0)}`,
+    flat_warn: (p: number) =>
+      `В исходнике ${p}% пикселей почти одной яркости — контрастную картинку из них не собрать, пиксели ведь не перекрашиваются. Лучше всего работают фото с тёмными и светлыми местами. Или попробуй поменять местами.`,
     stats_hint:
       "Разница цвета — насколько собранная картинка отличается от цели по цвету (средний ΔE в пространстве Lab, 0 — один в один). Первое число — после простой сортировки по яркости, второе — после обменов. Меньше — точнее. Если палитры картинок сильно разные, число останется большим: пиксели не перекрашиваются.",
     how_idx: "(02) Как это работает",
@@ -134,6 +136,8 @@ const dict = {
     bad_file: "couldn't open that file",
     stats: (n: number, ms: number, a: number, b: number) =>
       `grid ${n}×${n} · computed in ${(ms / 1000).toFixed(1)} s · color difference ${a.toFixed(0)} → ${b.toFixed(0)}`,
+    flat_warn: (p: number) =>
+      `${p}% of the source pixels share almost the same brightness, so there is no contrast to build with — pixels are never recolored. Photos with both darks and lights work best. Or try swapping.`,
     stats_hint:
       "Color difference is how far the rebuilt picture is from the target in color (mean ΔE in Lab space, 0 means identical). First number is after a plain brightness sort, second after the swaps. Lower is closer. Very different palettes keep it high: pixels are never recolored.",
     how_idx: "(02) How it works",

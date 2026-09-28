@@ -426,3 +426,4 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; bo
 .hint { margin: 8px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.45; color: var(--soft-dark); }
 .seg .dice { color: var(--paper); }
 .seg .dice:hover { color: var(--hot); }
+.hint.warn { color: var(--paper); border-left: 2px solid var(--hot); padding-left: 10px; }
