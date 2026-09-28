@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Assigner } from "@/lib/engine/client";
 import { flatness, rgbaToLab } from "@/lib/engine/color";
@@ -10,7 +9,8 @@ import { PixelRenderer } from "@/lib/engine/renderer";
 import { DEFAULT_TRAJ, randomTrajectory, type Trajectory } from "@/lib/engine/trajectory";
 import { useLang } from "@/lib/i18n";
 import { DEMOS, INK } from "@/lib/site";
-import { Line } from "./Reveal";
+import { Info } from "./Info";
+import { Line, Presence } from "./Reveal";
 import { TrajectoryEditor } from "./TrajectoryEditor";
 
 type Slot = "src" | "tgt";
@@ -72,7 +72,6 @@ export function Playground() {
   const [recording, setRecording] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [hint, setHint] = useState(false);
   const [flat, setFlat] = useState(0);
 
   const st = useRef({ t: 0, dir: 1, playing: false, seed: 0, duration: 4, trails: false, inView: false, traj: DEFAULT_TRAJ });
@@ -333,14 +332,10 @@ export function Playground() {
         <div className="play-stage">
           <div className="play-frame">
             {failed ? <p className="mono fail">WebGL2 is not available</p> : <canvas ref={canvas} className="play-canvas" />}
-            <AnimatePresence>
-              {progress !== null && (
-                <motion.div className="play-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <span className="pct">{Math.round(progress * 100)}</span>
-                  <span className="mono">{t.computing}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <Presence show={progress !== null} className="play-overlay">
+              <span className="pct">{Math.round((progress ?? 1) * 100)}</span>
+              <span className="mono">{t.computing}</span>
+            </Presence>
           </div>
           <div className="transport">
             <button className="txt" onClick={togglePlay} disabled={busy}>
@@ -365,13 +360,8 @@ export function Playground() {
           </div>
           <p className={`mono status ${status?.error ? "error" : ""}`}>
             {status ? t[status.key] : stats ? t.stats(stats.n, stats.ms, stats.a, stats.b) : " "}
-            {!status && stats && (
-              <button className="info" aria-label="?" aria-expanded={hint} onClick={() => setHint(!hint)}>
-                ?
-              </button>
-            )}
+            {!status && stats && <Info text={t.stats_hint} />}
           </p>
-          {hint && <p className="hint">{t.stats_hint}</p>}
           {flat > 0.7 && progress === null && <p className="hint warn">{t.flat_warn(Math.round(flat * 100))}</p>}
         </div>
 
@@ -392,7 +382,10 @@ export function Playground() {
                 <span className="mono idx">(0{i + 1})</span>
                 {img ? <img src={img.thumb} alt="" /> : <span className="thumb-empty" />}
                 <span className="slot-text">
-                  <b>{slot === "src" ? t.from : t.into}</b>
+                  <b>
+                    {slot === "src" ? t.from : t.into}
+                    <Info text={slot === "src" ? t.tips.from : t.tips.into} />
+                  </b>
                   <span className="mono">{img?.name ?? "…"} · {t.drop}</span>
                 </span>
                 <input
@@ -410,7 +403,9 @@ export function Playground() {
           })}
 
           <div className="block">
-            <span className="mono idx">{t.presets}</span>
+            <span className="mono idx">
+              {t.presets} <Info text={t.tips.presets} />
+            </span>
             <div className="chips">
               {DEMOS.map((d) => (
                 <button key={d.id} className={tgt?.name === d.id ? "on" : ""} disabled={busy} onClick={() => loadDemo("tgt", d.id, d.src)}>
@@ -425,7 +420,9 @@ export function Playground() {
           </div>
 
           <div className="block">
-            <span className="mono idx">(03) {t.grid}</span>
+            <span className="mono idx">
+              (03) {t.grid} <Info text={t.tips.grid} />
+            </span>
             <div className="seg">
               {GRIDS.map((g) => (
                 <button key={g} className={g === n ? "on" : ""} disabled={busy} onClick={() => setN(g)}>
@@ -436,7 +433,9 @@ export function Playground() {
           </div>
 
           <div className="block">
-            <span className="mono idx">(04) {t.order}</span>
+            <span className="mono idx">
+              (04) {t.order} <Info text={t.tips.order} />
+            </span>
             <div className="seg small">
               {MODES.map((m) => (
                 <button key={m} className={m === mode ? "on" : ""} disabled={busy} onClick={() => pickMode(m)}>
@@ -447,22 +446,25 @@ export function Playground() {
           </div>
 
           <div className="block">
-            <span className="mono idx">(05) {t.traj}</span>
+            <span className="mono idx">
+              (05) {t.traj} <Info text={t.tips.traj} />
+            </span>
             <TrajectoryEditor value={traj} onChange={pickTraj} disabled={recording} />
           </div>
 
           <div className="block row2">
             <label className="field">
               <span className="mono idx">
-                (06) {t.duration} <b>
+                (06) {t.duration} <Info text={t.tips.duration} />{" "}
+                <b>
                   {duration.toFixed(1)} {t.sec}
                 </b>
               </span>
               <input type="range" min={1} max={12} step={0.5} value={duration} onChange={(e) => setDuration(+e.target.value)} />
             </label>
             <div className="field">
-              <span className="mono idx" title={t.trails_hint}>
-                (07) {t.trails}
+              <span className="mono idx">
+                (07) {t.trails} <Info text={t.tips.trails} />
               </span>
               <div className="seg small">
                 <button className={trails ? "on" : ""} onClick={() => setTrails(true)}>
@@ -476,7 +478,9 @@ export function Playground() {
           </div>
 
           <div className="block export">
-            <span className="mono idx">(08) {t.save}</span>
+            <span className="mono idx">
+              (08) {t.save} <Info text={t.tips.save} />
+            </span>
             <button className="big" disabled={busy} onClick={() => startRecording(1080, 1080)}>
               {t.video_sq} <span>↗</span>
             </button>
@@ -490,13 +494,9 @@ export function Playground() {
         </div>
       </div>
 
-      <AnimatePresence>
-        {dragging && (
-          <motion.div className="drop-veil" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <span>{t.drop_here}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Presence show={dragging} className="drop-veil">
+        <span>{t.drop_here}</span>
+      </Presence>
     </section>
   );
 }

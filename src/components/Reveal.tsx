@@ -1,39 +1,68 @@
 "use client";
 
-import { motion } from "motion/react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+import { EASE, gsap, useGSAP } from "@/lib/gsap";
 
-const ease = [0.76, 0, 0.24, 1] as const;
-
-// the mask watches the viewport, not the inner text: clipped text never counts as "in view"
+// text line slides up out of a mask. `show` drives it by hand, otherwise it plays when scrolled into view
 export function Line({ children, delay = 0, show }: { children: ReactNode; delay?: number; show?: boolean }) {
-  const trigger =
-    show === undefined
-      ? { initial: "hidden", whileInView: "shown", viewport: { once: true, margin: "-8% 0px" } }
-      : { initial: "hidden", animate: show ? "shown" : "hidden" };
+  const mask = useRef<HTMLSpanElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+
+  useGSAP(
+    () => {
+      if (show === false) return;
+      gsap.fromTo(inner.current, { y: 0, yPercent: 110 }, {
+        yPercent: 0,
+        duration: 1.1,
+        ease: EASE,
+        delay,
+        // the mask is the trigger: the clipped inner text never counts as visible
+        scrollTrigger: show === undefined ? { trigger: mask.current, start: "top 92%", once: true } : undefined,
+      });
+    },
+    { dependencies: [show] },
+  );
+
   return (
-    <motion.span className="line" {...trigger}>
-      <motion.span
-        className="line-inner"
-        variants={{ hidden: { y: "110%" }, shown: { y: "0%" } }}
-        transition={{ duration: 1.1, ease, delay }}
-      >
+    <span ref={mask} className="line">
+      <span ref={inner} className="line-inner">
         {children}
-      </motion.span>
-    </motion.span>
+      </span>
+    </span>
   );
 }
 
 export function Fade({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
+  const el = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    gsap.fromTo(el.current, { autoAlpha: 0, y: 24 }, {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.9,
+      ease: EASE,
+      delay,
+      scrollTrigger: { trigger: el.current, start: "top 92%", once: true },
+    });
+  });
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-8% 0px" }}
-      transition={{ duration: 0.9, ease, delay }}
-    >
+    <div ref={el} className={`fade ${className ?? ""}`}>
       {children}
-    </motion.div>
+    </div>
+  );
+}
+
+// keeps the node mounted and fades it in / out
+export function Presence({ show, className, children }: { show: boolean; className?: string; children: ReactNode }) {
+  const el = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      gsap.to(el.current, { autoAlpha: show ? 1 : 0, duration: show ? 0.3 : 0.45, ease: "power2.out" });
+    },
+    { dependencies: [show] },
+  );
+  return (
+    <div ref={el} className={className} style={{ visibility: "hidden", opacity: 0 }} aria-hidden={!show}>
+      {children}
+    </div>
   );
 }

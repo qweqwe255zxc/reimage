@@ -22,8 +22,10 @@ uniform float uBurst;
 uniform float uWobble;
 uniform int uEase;
 uniform float uDepthBias;
+uniform float uTNow;
 out vec3 vColor;
 out float vLift;
+out float vNow;
 
 float ease(float p) {
   if (uEase == 1) return p >= 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * p);
@@ -34,6 +36,7 @@ float ease(float p) {
 
 void main() {
   float p = clamp((uT - aRank * uSpread) / (1.0 - uSpread), 0.0, 1.0);
+  float pNow = (uTNow - aRank * uSpread) / (1.0 - uSpread);
   float e = ease(p);
   float arc = sin(3.14159265 * clamp(e, 0.0, 1.0));
   vec2 d = aEnd - aStart;
@@ -51,21 +54,25 @@ void main() {
   vec2 clip = vec2((pos.x + 0.5) / uN * 2.0 - 1.0, 1.0 - (pos.y + 0.5) / uN * 2.0);
   float lift = arc * step(0.01, dot(d, d));
   gl_Position = vec4(clip, 0.5 - 0.49 * lift + uDepthBias, 1.0); // flying ones on top
-  gl_PointSize = uPoint * (1.0 + uLift * lift);
+  gl_PointSize = uPoint * (1.0 + 1.6 * uLift * lift);
   vColor = aColor;
   vLift = lift;
+  vNow = pNow > 0.0 && pNow < 1.0 ? 1.0 : 0.0; // still flying right now
 }`;
 
 const FS = `#version 300 es
 precision highp float;
 in vec3 vColor;
 in float vLift;
+in float vNow;
 uniform float uGlow;
+uniform float uLift;
 uniform float uGhost;
 out vec4 outColor;
 void main() {
-  if (uGhost > 0.0 && vLift < 0.02) discard; // only flying particles leave a tail
-  outColor = vec4(vColor * (1.0 + uGlow * vLift), uGhost > 0.0 ? uGhost : 1.0);
+  // tails only for particles in the air now, otherwise landed ones would leave a blur on the final frame
+  if (uGhost > 0.0 && (vLift < 0.02 || vNow < 0.5)) discard;
+  outColor = vec4(vColor * (1.0 + uGlow * vLift * (0.4 + uLift)), uGhost > 0.0 ? uGhost : 1.0); // lift also brightens
 }`;
 
 function compile(gl: WebGL2RenderingContext, vs: string, fs: string) {
@@ -111,7 +118,7 @@ export class PixelRenderer {
     this.prog = compile(gl, VS, FS);
     this.vao = gl.createVertexArray()!;
     this.maxPoint = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)[1];
-    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow", "uArc", "uBias", "uSwirl", "uBurst", "uWobble", "uEase", "uGhost", "uDepthBias"]) this.u[name] = gl.getUniformLocation(this.prog, name);
+    for (const name of ["uT", "uSpread", "uN", "uPoint", "uLift", "uGlow", "uArc", "uBias", "uSwirl", "uBurst", "uWobble", "uEase", "uGhost", "uDepthBias", "uTNow"]) this.u[name] = gl.getUniformLocation(this.prog, name);
 
     gl.bindVertexArray(this.vao);
     const attr = (name: string, size: number, type: number, normalized = false) => {
@@ -183,6 +190,7 @@ export class PixelRenderer {
     const cell = this.canvas.width / m.n;
     const tr = o.traj ?? DEFAULT_TRAJ;
     gl.uniform1f(this.u.uT, t);
+    gl.uniform1f(this.u.uTNow, t);
     gl.uniform1f(this.u.uSpread, Math.min(0.95, tr.spread));
     gl.uniform1f(this.u.uN, m.n);
     gl.uniform1f(this.u.uPoint, Math.min(this.maxPoint / 2, cell + 0.35)); // tiny overlap hides seams

@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { EASE, gsap, useGSAP } from "@/lib/gsap";
 import { useLang } from "@/lib/i18n";
 import { HeroCanvas } from "./HeroCanvas";
 import { useIntro } from "./Providers";
@@ -12,6 +12,17 @@ export function Hero() {
   const { t } = useLang();
   const { ready } = useIntro();
   const [step, setStep] = useState({ from: "plasma", to: "sunset", i: -1, style: "smooth" });
+  const art = useRef<HTMLElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      if (!ready) return;
+      gsap.fromTo(art.current, { autoAlpha: 0, scale: 0.96 }, { autoAlpha: 1, scale: 1, duration: 1.4, ease: EASE, delay: 0.2 });
+      gsap.fromTo(bottom.current, { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 1, ease: EASE, delay: 0.45 });
+    },
+    { dependencies: [ready] },
+  );
 
   return (
     <section className="hero">
@@ -25,12 +36,7 @@ export function Hero() {
         </Line>
       </h1>
 
-      <motion.figure
-        className="hero-art"
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={ready ? { opacity: 1, scale: 1 } : undefined}
-        transition={{ duration: 1.4, ease: [0.76, 0, 0.24, 1], delay: 0.2 }}
-      >
+      <figure ref={art} className="hero-art">
         <HeroCanvas onStep={(from, to, i, style) => setStep({ from, to, i, style })} />
         <figcaption className="mono hero-caption">
           <span>
@@ -41,14 +47,9 @@ export function Hero() {
           </span>
           <span>{String(Math.max(0, step.i) + 1).padStart(2, "0")}/04</span>
         </figcaption>
-      </motion.figure>
+      </figure>
 
-      <motion.div
-        className="hero-bottom"
-        initial={{ opacity: 0, y: 20 }}
-        animate={ready ? { opacity: 1, y: 0 } : undefined}
-        transition={{ duration: 1, ease: [0.76, 0, 0.24, 1], delay: 0.45 }}
-      >
+      <div ref={bottom} className="hero-bottom">
         <p className="hero-lede">{t.hero_lede}</p>
         <button className="cta" data-cursor="↓" onClick={() => scrollToId("play")}>
           {t.hero_cta} <span>↘</span>
@@ -67,7 +68,7 @@ export function Hero() {
             <dd>0</dd>
           </div>
         </dl>
-      </motion.div>
+      </div>
     </section>
   );
 }

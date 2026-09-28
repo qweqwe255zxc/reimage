@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
+import { Info } from "./Info";
 import { EASES, pathPoint, PRESETS, randomTrajectory, type Trajectory } from "@/lib/engine/trajectory";
 
 const N = 20;
@@ -106,7 +107,10 @@ export function TrajectoryEditor({ value, onChange, disabled }: { value: Traject
         {KNOBS.map((k) => (
           <label key={k.key} className="knob">
             <span className="mono">
-              {t.knobs[k.key]} <b>{fmt(k.key, value[k.key])}</b>
+              <span>
+                {t.knobs[k.key]} <Info text={t.tips[k.key]} />
+              </span>
+              <b>{fmt(k.key, value[k.key])}</b>
             </span>
             <input
               type="range"
@@ -122,6 +126,9 @@ export function TrajectoryEditor({ value, onChange, disabled }: { value: Traject
       </div>
 
       <div className="seg small">
+        <span className="mono idx seg-label">
+          {t.ease} <Info text={t.tips.ease} />
+        </span>
         {EASES.map((e) => (
           <button key={e} className={value.ease === e ? "on" : ""} disabled={disabled} onClick={() => onChange({ ...value, ease: e })}>
             {t.eases[e]}

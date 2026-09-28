@@ -1,7 +1,7 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { EASE, gsap } from "@/lib/gsap";
 import { useIntro } from "./Providers";
 
 const ASSETS = ["/demo/plasma.png", "/demo/sunset.png", "/demo/orb.png", "/demo/type.png", "/demo/rings.png"];
@@ -11,6 +11,7 @@ export function Preloader() {
   const [count, setCount] = useState(0);
   const [done, setDone] = useState(false);
   const loaded = useRef(0);
+  const el = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     for (const src of ASSETS) fetch(src).finally(() => loaded.current++);
@@ -24,8 +25,8 @@ export function Preloader() {
       setCount(Math.round(v * 100));
       if (v >= 1) {
         setTimeout(() => {
-          setDone(true);
           setReady(true);
+          gsap.to(el.current, { clipPath: "inset(0 0 100% 0)", duration: 0.9, ease: EASE, onComplete: () => setDone(true) });
         }, 180);
       } else raf = requestAnimationFrame(tick);
     };
@@ -33,18 +34,11 @@ export function Preloader() {
     return () => cancelAnimationFrame(raf);
   }, [setReady]);
 
+  if (done) return null;
   return (
-    <AnimatePresence>
-      {!done && (
-        <motion.div
-          className="preloader"
-          exit={{ clipPath: "inset(0 0 100% 0)" }}
-          transition={{ duration: 0.9, ease: [0.76, 0, 0.24, 1] }}
-        >
-          <span className="preloader-mark">ReImage®</span>
-          <span className="preloader-count">{count}</span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div ref={el} className="preloader">
+      <span className="preloader-mark">ReImage®</span>
+      <span className="preloader-count">{count}</span>
+    </div>
   );
 }
