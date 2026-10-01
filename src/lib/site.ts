@@ -13,3 +13,7 @@ export const DEMOS = [
   { id: "rings", src: "/demo/rings.png" },
   { id: "plasma", src: "/demo/plasma.png" },
 ] as const;
+
+// production domain on vercel (custom one if attached), localhost otherwise
+const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+export const SITE_URL = host ? `https://${host}` : "http://localhost:3000";
