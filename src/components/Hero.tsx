@@ -24,6 +24,7 @@ export function Hero() {
     { dependencies: [ready] },
   );
 
+  
   return (
     <section className="hero">
       <h1 className="hero-title">
